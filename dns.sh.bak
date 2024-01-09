@@ -1,0 +1,95 @@
+!/bin/bash 
+
+
+
+DNS 서버에 필요한 패키지 설치 
+
+yum install bind bind-chroot
+
+
+현재 /etc/named.conf 파일 내용을 저장 
+
+before=$(cat /etc/named.conf)
+
+
+sed를 사용하여 /etc/named.conf 파일수정 
+
+sed -i 's/ 127.0.0.1; /  any; /g' /etc/named.conf 
+sed -i 's/ localhost; /  any; /g' /etc/named.conf
+
+수정 후 /etc/name.conf 파일 내용 저장 
+
+after=$(cat /etc/named.conf) 
+
+
+현재 /etc/named.rfc1912.zones 내용 저장 
+
+before=$(cat /etc/named.rfc1912.zones)
+
+
+DNS named.rfc1912.zones 파일 설정 
+
+sed -i '$a\
+\
+zone "web.com" IN {\
+	type master;\
+	file "web.com.zone";\
+	allow-update { none; }; \
+};' /etc/named.rfc1912.zones
+
+
+zone 파일의 규칙 및 도메인의 연결할 IP 레코드를 추가한다
+
+touch /var/named/web.com.zone
+chown root:named /var/named/web.com.zone
+
+
+존 파일 경로 지정 
+
+zoneFilePath="/var/named/web.com.zone"
+
+
+존 파일 생성 
+
+tee "$zoneFilePath" > /dev/null <<EOF
+$TTL 1D
+@       IN SOA  web.com. root. (
+                                        0       ; serial
+                                        1D      ; refresh
+                                        1H      ; retry
+                                        1W      ; expire
+                                        1D )    ; minimum
+           IN	NS      web.com.
+           IN	A       192.168.0.76
+www        IN	A       192.168.0.76
+EOF
+
+
+named 체크가 잘 되어있는지 확인 
+
+named-checkzone web.com.zone /var/named/web.com.zone
+
+
+시스템 재시작 
+
+systemctl restart named
+systemctl status named
+
+
+새로운 네임서버 추가 
+
+sed -i '/^nameserver/a nameserver 192.168.0.76' /etc/resolv.conf
+
+
+nslookup 으로 확인 
+
+nslookup www.web.com
+
+ 
+내용이 변경 되었는지 확인 
+
+if [ "$before" != "$after" ]; then
+    echo "설정이 변경되었습니다."
+else
+    echo "설정이 변경되지 않았습니다."
+fi
